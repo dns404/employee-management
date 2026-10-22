@@ -5,6 +5,7 @@ import AppLayout from './components/AppLayout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import EmployeesPage from './pages/EmployeesPage';
+import ProfilePage from './pages/ProfilePage';
 import MyLeavesPage from './pages/MyLeavesPage';
 import ApprovalsPage from './pages/ApprovalsPage';
 import UsersPage from './pages/UsersPage';
@@ -13,6 +14,13 @@ import RolesPage from './pages/RolesPage';
 function RequirePermission({ perm, children }) {
   const { can } = useAuth();
   return can(perm) ? children : <Result status="403" title="403" subTitle="You are not authorized to view this page." />;
+}
+
+// Users who can only see themselves get the profile page instead of a one-row list
+function EmployeesRoute() {
+  const { can } = useAuth();
+  if (can('employee:read:all') || can('employee:read:team')) return <EmployeesPage />;
+  return can('employee:read') ? <Navigate to="/profile" replace /> : <RequirePermission perm="employee:read" />;
 }
 
 export default function App() {
@@ -32,7 +40,8 @@ export default function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
-        <Route path="employees" element={<RequirePermission perm="employee:read"><EmployeesPage /></RequirePermission>} />
+        <Route path="employees" element={<EmployeesRoute />} />
+        <Route path="profile" element={<RequirePermission perm="employee:read"><ProfilePage /></RequirePermission>} />
         <Route path="leaves" element={<RequirePermission perm="leave:create"><MyLeavesPage /></RequirePermission>} />
         <Route path="approvals" element={<RequirePermission perm="leave:approve"><ApprovalsPage /></RequirePermission>} />
         <Route path="users" element={<RequirePermission perm="user:manage"><UsersPage /></RequirePermission>} />

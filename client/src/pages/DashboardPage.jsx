@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Col, Descriptions, Empty, Row, Skeleton } from 'antd';
+import { Button, Card, Col, Empty, Row, Skeleton } from 'antd';
 import { CalendarOutlined, CheckSquareOutlined, ClockCircleOutlined, PlusOutlined, TeamOutlined, ArrowRightOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useAuth } from '../auth/AuthContext';
 import api from '../api/client';
-import { PageHeader, PersonCell, StatCard, StatusTag, UserAvatar, fmtRange } from '../components/common';
+import { PageHeader, PersonCell, StatCard, StatusTag, fmtRange } from '../components/common';
+import ProfileCard from '../components/ProfileCard';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -19,6 +20,7 @@ export default function DashboardPage() {
   const canApprove = can('leave:approve');
   const canApply = can('leave:create');
   const seesOthers = can('employee:read:all') || can('employee:read:team');
+  const profileId = user.employee?.id;
 
   useEffect(() => {
     const get = (url, params) => api.get(url, { params }).then((r) => r.data);
@@ -26,8 +28,9 @@ export default function DashboardPage() {
       canApply ? get('/leaves', { view: 'mine', pageSize: 100 }) : null,
       canApprove ? get('/leaves', { view: 'team', status: 'PENDING', pageSize: 5 }) : null,
       seesOthers ? get('/employees', { status: 'ACTIVE', pageSize: 1 }) : null,
-    ]).then(([mine, approvals, people]) => setData({ mine, approvals, people }));
-  }, [canApply, canApprove, seesOthers]);
+      profileId && can('employee:read') ? get(`/employees/${profileId}`) : null,
+    ]).then(([mine, approvals, people, profile]) => setData({ mine, approvals, people, profile }));
+  }, [canApply, canApprove, seesOthers, profileId, can]);
 
   const today = dayjs().format('YYYY-MM-DD');
   const myItems = data?.mine?.items || [];
@@ -46,7 +49,7 @@ export default function DashboardPage() {
     seesOthers && { icon: <TeamOutlined />, color: '#0891b2', label: can('employee:read:all') ? 'Active employees' : 'Team members (incl. me)', value: data?.people?.total ?? 0, to: '/employees' },
   ].filter(Boolean);
 
-  const [first = '', last = ''] = (user.employee?.name || '').split(' ');
+  const first = user.employee?.name?.split(' ')[0];
 
   return (
     <>
@@ -80,7 +83,7 @@ export default function DashboardPage() {
           </Col>
         )}
         {canApply && (
-          <Col xs={24} lg={canApprove ? 12 : 14}>
+          <Col xs={24} lg={canApprove ? 12 : 24}>
             <Card title="My upcoming leave" extra={<Button type="link" onClick={() => navigate('/leaves')}>View all <ArrowRightOutlined /></Button>} style={{ height: '100%' }}>
               {!data ? <Skeleton active /> : upcoming.length === 0 ? (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No upcoming leave">
@@ -98,21 +101,13 @@ export default function DashboardPage() {
             </Card>
           </Col>
         )}
-        {user.employee && (
-          <Col xs={24} lg={canApprove ? 24 : 10}>
-            <Card title="My profile" style={{ height: '100%' }}>
-              <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                <UserAvatar first={first} last={last} size={64} />
-                <Descriptions column={{ xs: 1, md: canApprove ? 3 : 1 }} size="small" style={{ flex: 1, minWidth: 240 }}>
-                  <Descriptions.Item label="Name">{user.employee.name}</Descriptions.Item>
-                  <Descriptions.Item label="Employee code">{user.employee.employeeCode}</Descriptions.Item>
-                  <Descriptions.Item label="Job title">{user.employee.jobTitle}</Descriptions.Item>
-                  <Descriptions.Item label="Department">{user.employee.department}</Descriptions.Item>
-                  <Descriptions.Item label="Manager">{user.employee.manager || '—'}</Descriptions.Item>
-                  <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
-                </Descriptions>
-              </div>
-            </Card>
+        {user.employee && can('employee:read') && (
+          <Col xs={24}>
+            <ProfileCard
+              title="My profile"
+              employee={data?.profile}
+              extra={<Button type="link" onClick={() => navigate('/profile')}>View profile <ArrowRightOutlined /></Button>}
+            />
           </Col>
         )}
       </Row>

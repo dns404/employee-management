@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Dropdown, Grid, Layout, Menu, Tag } from 'antd';
 import {
   AppstoreOutlined, TeamOutlined, CalendarOutlined, CheckSquareOutlined, UserOutlined, SafetyOutlined,
-  LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, DownOutlined,
+  LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, DownOutlined, IdcardOutlined,
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
@@ -43,10 +43,10 @@ export default function AppLayout() {
       type: 'group', label: 'Workspace',
       children: [
         { key: '/', icon: <AppstoreOutlined />, label: 'Dashboard' },
-        can('employee:read') && {
-          key: '/employees', icon: <TeamOutlined />,
-          label: can('employee:read:all') ? 'Employees' : can('employee:read:team') ? 'My Team' : 'My Profile',
+        (can('employee:read:all') || can('employee:read:team')) && {
+          key: '/employees', icon: <TeamOutlined />, label: can('employee:read:all') ? 'Employees' : 'My Team',
         },
+        can('employee:read') && { key: '/profile', icon: <IdcardOutlined />, label: 'My Profile' },
         can('leave:create') && { key: '/leaves', icon: <CalendarOutlined />, label: 'My Leaves' },
         can('leave:approve') && {
           key: '/approvals', icon: <CheckSquareOutlined />,
@@ -110,8 +110,9 @@ export default function AppLayout() {
               items: [
                 { key: 'who', disabled: true, label: <div style={{ color: '#64748b' }}>{user.email}</div> },
                 { type: 'divider' },
+                can('employee:read') && user.employee && { key: 'profile', icon: <IdcardOutlined />, label: 'My profile', onClick: () => navigate('/profile') },
                 { key: 'logout', icon: <LogoutOutlined />, label: 'Sign out', danger: true, onClick: logout },
-              ],
+              ].filter(Boolean),
             }}
           >
             <Button type="text" style={{ height: 48, display: 'flex', alignItems: 'center', gap: 10 }}>
