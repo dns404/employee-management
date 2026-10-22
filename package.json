@@ -1,0 +1,14 @@
+{
+  "name": "employee-management",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Employee Management System with Role-Based Access Control",
+  "scripts": {
+    "setup": "npm install && npm --prefix server install && npm --prefix client install && docker compose up -d --wait && npm --prefix server run db:migrate && npm --prefix server run db:seed",
+    "dev": "concurrently -n api,web -c blue,green \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "test": "npm --prefix server test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.5"
+  }
+}

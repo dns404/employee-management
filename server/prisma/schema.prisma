@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  isActive     Boolean   @default(true) @map("is_active")
+  // Bumped on logout / role change / deactivation to invalidate refresh tokens
+  tokenVersion Int       @default(0) @map("token_version")
+  roleId       Int       @map("role_id")
+  role         Role      @relation(fields: [roleId], references: [id])
+  employee     Employee?
+  leaveActions LeaveRequestHistory[]
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Role {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+  description String?
+  // System roles (e.g. Administrator) cannot be edited, to prevent lock-out
+  isSystem    Boolean          @default(false) @map("is_system")
+  permissions RolePermission[]
+  users       User[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          Int              @id @default(autoincrement())
+  key         String           @unique
+  description String
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       Int        @map("role_id")
+  permissionId Int        @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Department {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  employees Employee[]
+
+  @@map("departments")
+}
+
+model Employee {
+  id           Int            @id @default(autoincrement())
+  employeeCode String         @unique @map("employee_code")
+  firstName    String         @map("first_name")
+  lastName     String         @map("last_name")
+  phone        String?
+  address      String?
+  jobTitle     String         @map("job_title")
+  hireDate     DateTime       @map("hire_date") @db.Date
+  status       EmployeeStatus @default(ACTIVE)
+  userId       Int            @unique @map("user_id")
+  user         User           @relation(fields: [userId], references: [id])
+  departmentId Int            @map("department_id")
+  department   Department     @relation(fields: [departmentId], references: [id])
+  managerId    Int?           @map("manager_id")
+  manager      Employee?      @relation("Reporting", fields: [managerId], references: [id], onDelete: SetNull)
+  reports      Employee[]     @relation("Reporting")
+  leaves       LeaveRequest[]
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  @@index([managerId])
+  @@map("employees")
+}
+
+model LeaveType {
+  id     Int            @id @default(autoincrement())
+  name   String         @unique
+  leaves LeaveRequest[]
+
+  @@map("leave_types")
+}
+
+model LeaveRequest {
+  id          Int                   @id @default(autoincrement())
+  employeeId  Int                   @map("employee_id")
+  employee    Employee              @relation(fields: [employeeId], references: [id])
+  leaveTypeId Int                   @map("leave_type_id")
+  leaveType   LeaveType             @relation(fields: [leaveTypeId], references: [id])
+  startDate   DateTime              @map("start_date") @db.Date
+  endDate     DateTime              @map("end_date") @db.Date
+  days        Int
+  reason      String
+  status      LeaveStatus           @default(PENDING)
+  history     LeaveRequestHistory[]
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+
+  @@index([employeeId, status])
+  @@map("leave_requests")
+}
+
+model LeaveRequestHistory {
+  id             Int          @id @default(autoincrement())
+  leaveRequestId Int          @map("leave_request_id")
+  leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  fromStatus     LeaveStatus? @map("from_status")
+  toStatus       LeaveStatus  @map("to_status")
+  actorUserId    Int          @map("actor_user_id")
+  actor          User         @relation(fields: [actorUserId], references: [id])
+  comment        String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([leaveRequestId])
+  @@map("leave_request_history")
+}

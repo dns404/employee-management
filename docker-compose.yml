@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ems-postgres
+    environment:
+      POSTGRES_USER: ems
+      POSTGRES_PASSWORD: ems_password
+      POSTGRES_DB: employee_mgmt
+    ports:
+      - "5434:5432"
+    volumes:
+      - ems_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ems -d employee_mgmt"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  ems_pgdata:
