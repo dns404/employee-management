@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { App, Button, Card, Descriptions, Empty, Form, Input, Modal, Segmented, Space, Table, Tooltip } from 'antd';
-import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { App, Button, Card, Descriptions, Empty, Form, Input, Modal, Segmented, Table, Tooltip } from 'antd';
+import { CheckOutlined, CloseOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuth } from '../auth/AuthContext';
 import api, { errorMessage } from '../api/client';
@@ -67,22 +67,35 @@ export default function ApprovalsPage() {
     { title: 'Requested', responsive: ['md'], render: (_, l) => dayjs(l.createdAt).fromNow() },
     { title: 'Status', render: (_, l) => <StatusTag status={l.status} /> },
     {
-      title: '',
+      title: 'Actions',
       align: 'right',
+      fixed: 'right',
+      width: 250,
       render: (_, l) => {
         const own = l.employee.id === user.employee?.id;
+        const name = l.employee.firstName;
         return (
-          <Space size={4}>
+          <div className="row-actions">
             {l.status === 'PENDING' && (own ? (
-              <Tooltip title="You can't review your own request"><Button size="small" disabled>Review</Button></Tooltip>
+              <Tooltip title="Someone else must review your own request">
+                <span className="own-request"><LockOutlined /> Your request</span>
+              </Tooltip>
             ) : (
               <>
-                <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => setDecision({ leave: l, action: 'approve' })}>Approve</Button>
-                <Button size="small" danger icon={<CloseOutlined />} onClick={() => setDecision({ leave: l, action: 'reject' })}>Reject</Button>
+                <Button
+                  className="act-btn act-approve" icon={<CheckOutlined />} aria-label={`Approve ${name}'s request`}
+                  onClick={() => setDecision({ leave: l, action: 'approve' })}
+                >Approve</Button>
+                <Button
+                  className="act-btn act-reject" icon={<CloseOutlined />} aria-label={`Reject ${name}'s request`}
+                  onClick={() => setDecision({ leave: l, action: 'reject' })}
+                >Reject</Button>
               </>
             ))}
-            <Button type="link" size="small" onClick={() => setHistoryId(l.id)}>Details</Button>
-          </Space>
+            <Tooltip title="View details & history">
+              <Button className="act-btn act-details" icon={<EyeOutlined />} aria-label={`View ${name}'s request details`} onClick={() => setHistoryId(l.id)} />
+            </Tooltip>
+          </div>
         );
       },
     },
@@ -117,7 +130,7 @@ export default function ApprovalsPage() {
         open={!!decision}
         title={approving ? 'Approve leave request' : 'Reject leave request'}
         okText={approving ? 'Approve' : 'Reject request'}
-        okButtonProps={{ danger: !approving, icon: approving ? <CheckOutlined /> : <CloseOutlined /> }}
+        okButtonProps={{ color: approving ? 'green' : 'danger', variant: 'solid', icon: approving ? <CheckOutlined /> : <CloseOutlined /> }}
         onOk={form.submit}
         onCancel={closeDecision}
         confirmLoading={saving}

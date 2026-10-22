@@ -90,6 +90,26 @@ body {
 
 .row-inactive td { opacity: .55; }
 
+/* Table row actions - soft tinted buttons that fill on hover */
+.row-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.ant-btn.act-btn { height: 32px; border-radius: 8px; font-weight: 500; box-shadow: none; transition: background .15s, color .15s, border-color .15s; }
+.ant-btn.act-btn:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
+.ant-btn.act-approve { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+.ant-btn.act-approve:not(:disabled):hover { background: #059669; border-color: #059669; color: #fff; }
+.ant-btn.act-reject { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+.ant-btn.act-reject:not(:disabled):hover { background: #dc2626; border-color: #dc2626; color: #fff; }
+.ant-btn.act-details { width: 32px; padding: 0; background: #fff; border-color: #e2e8f0; color: #475569; }
+.ant-btn.act-details:not(:disabled):hover { background: #eef2ff; border-color: #c7d2fe; color: var(--brand); }
+.own-request {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 8px;
+  background: #f8fafc; border: 1px dashed #cbd5e1; color: var(--muted); font-size: 13px; cursor: help;
+}
+@media (max-width: 576px) {
+  /* Icon-only on phones to keep the row compact */
+  .ant-btn.act-approve, .ant-btn.act-reject { width: 32px; padding: 0; }
+  .ant-btn.act-approve > span:not(.ant-btn-icon), .ant-btn.act-reject > span:not(.ant-btn-icon) { display: none; }
+}
+
 /* Profile card */
 .profile-head { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .profile-name { font-size: 20px; font-weight: 600; color: #0f172a; line-height: 1.3; }
