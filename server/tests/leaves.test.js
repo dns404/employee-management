@@ -1,18 +1,18 @@
 const { prisma, login, api } = require('./helpers');
 
 let t = {};
-let annualId;
+let paidId;
 // Fixed far-future weekdays so tests don't depend on today's date
 const range = (start, end) => ({ startDate: start, endDate: end });
 
 beforeAll(async () => {
   for (const who of ['admin', 'manager', 'sara', 'employee', 'ethan']) t[who] = await login(who);
-  annualId = (await prisma.leaveType.findUnique({ where: { name: 'Annual' } })).id;
+  paidId = (await prisma.leaveType.findUnique({ where: { name: 'Paid' } })).id;
 });
 afterAll(() => prisma.$disconnect());
 
 const submit = (token, dates, reason = 'Holiday') =>
-  api(token).post('/api/leaves', { leaveTypeId: annualId, reason, ...dates });
+  api(token).post('/api/leaves', { leaveTypeId: paidId, reason, ...dates });
 
 describe('Leave submission', () => {
   test('employee submits a leave request; working days are calculated', async () => {
@@ -35,7 +35,7 @@ describe('Leave submission', () => {
   test('database constraint blocks overlaps even if the API check is bypassed', async () => {
     const emp = await prisma.employee.findFirst({ where: { firstName: 'Emma' } });
     await expect(prisma.leaveRequest.create({
-      data: { employeeId: emp.id, leaveTypeId: annualId, startDate: new Date('2030-03-05'), endDate: new Date('2030-03-05'), days: 1, reason: 'x' },
+      data: { employeeId: emp.id, leaveTypeId: paidId, startDate: new Date('2030-03-05'), endDate: new Date('2030-03-05'), days: 1, reason: 'x' },
     })).rejects.toThrow(/leave_no_overlap/);
   });
 });

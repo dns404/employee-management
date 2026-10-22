@@ -48,8 +48,8 @@ async function main() {
   const [eng, hr, sales] = await Promise.all(
     ['Engineering', 'Human Resources', 'Sales'].map((name) => prisma.department.create({ data: { name } })),
   );
-  const [annual, sick] = await Promise.all(
-    ['Annual', 'Sick', 'Unpaid'].map((name) => prisma.leaveType.create({ data: { name } })),
+  const [paid, sick] = await Promise.all(
+    ['Paid', 'Sick', 'Unpaid'].map((name) => prisma.leaveType.create({ data: { name } })),
   );
 
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
@@ -82,7 +82,7 @@ async function main() {
   // Sample leave requests
   await prisma.leaveRequest.create({
     data: {
-      employeeId: emp.emma.id, leaveTypeId: annual.id, startDate: addDays(30), endDate: addDays(32), days: 3,
+      employeeId: emp.emma.id, leaveTypeId: paid.id, startDate: addDays(30), endDate: addDays(32), days: 3,
       reason: 'Family trip',
       history: { create: { toStatus: 'PENDING', actorUserId: emp.emma.userId, comment: 'Submitted' } },
     },
@@ -101,7 +101,7 @@ async function main() {
   });
   await prisma.leaveRequest.create({
     data: {
-      employeeId: emp.sam.id, leaveTypeId: annual.id, startDate: addDays(14), endDate: addDays(18), days: 5,
+      employeeId: emp.sam.id, leaveTypeId: paid.id, startDate: addDays(14), endDate: addDays(18), days: 5,
       reason: 'Vacation',
       history: { create: { toStatus: 'PENDING', actorUserId: emp.sam.userId, comment: 'Submitted' } },
     },
