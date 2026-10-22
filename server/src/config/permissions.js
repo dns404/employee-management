@@ -36,4 +36,7 @@ const EMPLOYEE_EDITABLE_FIELDS = {
   own: ['phone', 'address'],
 };
 
-module.exports = { PERMISSIONS, ROLE_PERMISSIONS, EMPLOYEE_EDITABLE_FIELDS };
+// Only roles holding one of these can have direct reports (be someone's "Reports to")
+const MANAGER_PERMISSIONS = ['leave:approve:team', 'leave:approve:all'];
+
+module.exports = { PERMISSIONS, ROLE_PERMISSIONS, EMPLOYEE_EDITABLE_FIELDS, MANAGER_PERMISSIONS };

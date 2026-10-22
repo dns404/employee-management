@@ -18,7 +18,7 @@ A full-stack Employee Management System with **Role-Based Access Control** enfor
 ```bash
 npm run setup   # install deps, start PostgreSQL (port 5434), run migrations, seed demo data
 npm run dev     # API on http://localhost:4000, UI on http://localhost:5173
-npm test        # 44 API tests (uses a separate employee_mgmt_test database)
+npm test        # 48 API tests (uses a separate employee_mgmt_test database)
 ```
 
 Open **http://localhost:5173**. All demo accounts use the password **`Password@123`**. The login page has one-click buttons for the first three.
@@ -143,6 +143,7 @@ The full schema is in [`server/prisma/schema.prisma`](server/prisma/schema.prism
 - Rejection requires a reason.
 - Leave cannot start in the past, and the day count is working days only.
 - Reporting cycles (A → B → A) are rejected.
+- Only people whose role can approve team leave (Manager, Administrator) can have direct reports. The manager picker lists only them, and someone with reports cannot be moved to a role without that permission.
 - Admins cannot change their own role or deactivate themselves.
 - The last active administrator cannot be removed.
 - The system Administrator role is locked against edits, to prevent lock-out.
@@ -175,7 +176,7 @@ Errors always have the shape `{ "error": { "message": "...", "details": [{ "fiel
 
 ## Testing
 
-`npm test` runs **44 integration tests** with Jest and Supertest against a real PostgreSQL test database. The test database is migrated and re-seeded before each run. The tests focus on **unauthorized-access scenarios**:
+`npm test` runs **48 integration tests** with Jest and Supertest against a real PostgreSQL test database. The test database is migrated and re-seeded before each run. The tests focus on **unauthorized-access scenarios**:
 
 - **Authentication:** missing, malformed and forged tokens get 401. Logout revokes refresh tokens (a replayed token fails). Login responses don't enumerate accounts.
 - **Employees:**

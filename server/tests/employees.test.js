@@ -60,6 +60,11 @@ describe('Employee creation', () => {
     expect(res.body.manager.id).toBe(id.manager);
   });
 
+  test('new employee cannot be placed under an employee-role user', async () => {
+    const res = await api(t.admin).post('/api/employees', { ...(await newEmployee()), managerId: id.employee });
+    expect(res.status).toBe(400);
+  });
+
   test('duplicate email is rejected with 409', async () => {
     const body = { ...(await newEmployee()), email: 'employee@ems.local' };
     expect((await api(t.admin).post('/api/employees', body)).status).toBe(409);
@@ -95,10 +100,27 @@ describe('Employee updates (field-level permissions)', () => {
   });
 
   test('admin cannot create a reporting cycle', async () => {
-    // Mark reports to Alice; making Alice report to Emma (who reports to Mark) is a cycle
-    const res = await api(t.admin).patch(`/api/employees/${id.admin}`, { managerId: id.employee });
+    // Mark reports to Alice; making Alice report to Mark is a cycle
+    const res = await api(t.admin).patch(`/api/employees/${id.admin}`, { managerId: id.manager });
     expect(res.status).toBe(400);
     expect(res.body.error.message).toMatch(/cycle/);
+  });
+
+  test('an employee-role user cannot be assigned as someone\'s manager', async () => {
+    // Emma has the Employee role, so she cannot have direct reports
+    const res = await api(t.admin).patch(`/api/employees/${id.ethan}`, { managerId: id.employee });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/Manager or Administrator/);
+    // Assigning a real manager still works
+    expect((await api(t.admin).patch(`/api/employees/${id.ethan}`, { managerId: id.manager })).status).toBe(200);
+  });
+
+  test('manager picker only offers people allowed to have direct reports', async () => {
+    const res = await api(t.admin).get('/api/lookups/managers');
+    const ids = res.body.map((m) => m.id);
+    expect(ids).toEqual(expect.arrayContaining([id.admin, id.manager]));
+    expect(ids).not.toContain(id.employee);
+    expect(ids).not.toContain(id.ethan);
   });
 
   test('only admin can deactivate employees', async () => {

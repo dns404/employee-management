@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const prisma = require('../../lib/prisma');
 const { authorize } = require('../../middlewares/authorize');
+const { eligibleManagerWhere } = require('../employees/employees.service');
 
 // Reference data for dropdowns (any authenticated user)
 router.get('/', async (req, res) => {
@@ -11,10 +12,10 @@ router.get('/', async (req, res) => {
   res.json({ departments, leaveTypes });
 });
 
-// Manager picker - only for users who can assign managers
+// Manager picker - only for users who can assign managers; lists only people allowed to have reports
 router.get('/managers', authorize('employee:create', 'employee:update:all'), async (req, res) => {
   const managers = await prisma.employee.findMany({
-    where: { status: 'ACTIVE' },
+    where: eligibleManagerWhere,
     select: { id: true, firstName: true, lastName: true, jobTitle: true },
     orderBy: { firstName: 'asc' },
   });

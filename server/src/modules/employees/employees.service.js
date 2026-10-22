@@ -2,7 +2,7 @@ const bcrypt = require('bcrypt');
 const prisma = require('../../lib/prisma');
 const ApiError = require('../../utils/ApiError');
 const { scopeOf } = require('../../middlewares/authorize');
-const { EMPLOYEE_EDITABLE_FIELDS } = require('../../config/permissions');
+const { EMPLOYEE_EDITABLE_FIELDS, MANAGER_PERMISSIONS } = require('../../config/permissions');
 
 const include = {
   department: true,
@@ -45,11 +45,19 @@ async function getVisible(user, id) {
   return employee;
 }
 
+// Prisma filter: active employees whose role allows them to manage a team
+const eligibleManagerWhere = {
+  status: 'ACTIVE',
+  user: { isActive: true, role: { permissions: { some: { permission: { key: { in: MANAGER_PERMISSIONS } } } } } },
+};
+
 async function assertValidManager(employeeId, managerId) {
   if (managerId == null) return;
   if (managerId === employeeId) throw ApiError.badRequest('An employee cannot be their own manager');
   const manager = await prisma.employee.findUnique({ where: { id: managerId } });
   if (!manager || manager.status !== 'ACTIVE') throw ApiError.badRequest('Manager must be an active employee');
+  const eligible = await prisma.employee.count({ where: { id: managerId, ...eligibleManagerWhere } });
+  if (!eligible) throw ApiError.badRequest('Only a Manager or Administrator can have direct reports');
   // Walk up the chain to prevent reporting cycles (A -> B -> A)
   let cursor = manager;
   while (employeeId && cursor?.managerId) {
@@ -121,4 +129,4 @@ async function deactivate(user, id) {
   });
 }
 
-module.exports = { list, getVisible, create, update, deactivate, editableFields };
+module.exports = { list, getVisible, create, update, deactivate, editableFields, eligibleManagerWhere };

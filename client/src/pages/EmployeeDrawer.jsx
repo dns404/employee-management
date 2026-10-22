@@ -125,7 +125,11 @@ export default function EmployeeDrawer({ employeeId, onClose, onSaved }) {
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item name="managerId" label={label('Reports to', 'managerId')}>
+              <Form.Item
+                name="managerId"
+                label={label('Reports to', 'managerId')}
+                extra={!locked('managerId') && 'Only Managers and Administrators can have direct reports.'}
+              >
                 <Select
                   allowClear showSearch optionFilterProp="label" disabled={locked('managerId')} placeholder="No manager"
                   options={managers.filter((m) => m.id !== employeeId).map((m) => ({ value: m.id, label: `${m.firstName} ${m.lastName}` }))}

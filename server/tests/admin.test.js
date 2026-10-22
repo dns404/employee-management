@@ -35,6 +35,13 @@ describe('User management', () => {
     expect((await api(ethanToken).get('/api/leaves?view=team')).status).toBe(403);
   });
 
+  test('a manager with direct reports cannot be demoted to a role that cannot manage', async () => {
+    const markId = await userIdOf('manager');
+    const res = await api(t.admin).patch(`/api/users/${markId}`, { roleId: roles.Employee.id });
+    expect(res.status).toBe(409);
+    expect(res.body.error.message).toMatch(/direct report/);
+  });
+
   test('deactivated user is locked out immediately and cannot log in', async () => {
     const samId = await userIdOf('sam');
     const samToken = await login('sam');

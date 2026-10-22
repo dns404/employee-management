@@ -5,6 +5,7 @@ const prisma = require('../../lib/prisma');
 const validate = require('../../middlewares/validate');
 const { authorize } = require('../../middlewares/authorize');
 const ApiError = require('../../utils/ApiError');
+const { MANAGER_PERMISSIONS } = require('../../config/permissions');
 
 const ADMIN_PERMISSION = 'user:manage';
 
@@ -57,7 +58,16 @@ router.patch('/:id', validate({ params: Joi.object({ id: Joi.number().integer().
 
   const targetIsAdmin = target.role.permissions.some((rp) => rp.permission.key === ADMIN_PERMISSION);
   if (targetIsAdmin && (isActive === false || roleId !== undefined)) await assertNotLastAdmin(id);
-  if (roleId !== undefined && !(await prisma.role.findUnique({ where: { id: roleId } }))) throw ApiError.badRequest('Role does not exist');
+  if (roleId !== undefined) {
+    const newRole = await prisma.role.findUnique({ where: { id: roleId }, include: { permissions: { include: { permission: true } } } });
+    if (!newRole) throw ApiError.badRequest('Role does not exist');
+    // A person with direct reports must keep a role that is allowed to manage a team
+    const canManage = newRole.permissions.some((rp) => MANAGER_PERMISSIONS.includes(rp.permission.key));
+    const reports = target.employee ? await prisma.employee.count({ where: { managerId: target.employee.id } }) : 0;
+    if (!canManage && reports) {
+      throw ApiError.conflict(`This user has ${reports} direct report(s). Reassign them to another manager before changing to ${newRole.name}.`);
+    }
+  }
 
   const user = await prisma.$transaction(async (tx) => {
     if (isActive !== undefined && target.employee) {
