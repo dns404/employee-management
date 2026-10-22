@@ -1,40 +1,52 @@
-import { useCallback, useEffect, useState } from 'react';
-import { App, Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Table, Typography } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, App, Button, Card, Col, DatePicker, Drawer, Empty, Form, Input, Radio, Row, Segmented, Table } from 'antd';
+import { CalendarOutlined, CheckCircleOutlined, ClockCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import api, { applyFieldErrors, errorMessage } from '../api/client';
-import { LeaveHistoryDrawer, StatusTag, fmtDate, useLookups } from '../components/common';
+import { LeaveHistoryDrawer, PageHeader, StatCard, StatusTag, fmtRange, useLookups, workingDays } from '../components/common';
 
 export default function MyLeavesPage() {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const { leaveTypes } = useLookups();
   const [form] = Form.useForm();
-  const [data, setData] = useState({ items: [], total: 0 });
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [applying, setApplying] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const [items, setItems] = useState([]);
+  const [filter, setFilter] = useState('ALL');
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [historyId, setHistoryId] = useState(null);
+  const applying = params.get('apply') === '1';
+  const range = Form.useWatch('range', form);
+
+  const setApplying = (open) => setParams(open ? { apply: '1' } : {}, { replace: true });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: res } = await api.get('/leaves', { params: { view: 'mine', page, pageSize: 10 } });
-      setData(res);
+      setItems((await api.get('/leaves', { params: { view: 'mine', pageSize: 100 } })).data.items);
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const submit = async ({ leaveTypeId, range, reason }) => {
+  const year = String(new Date().getFullYear());
+  const summary = useMemo(() => ({
+    pending: items.filter((l) => l.status === 'PENDING').length,
+    approvedDays: items.filter((l) => l.status === 'APPROVED' && l.startDate.startsWith(year)).reduce((s, l) => s + l.days, 0),
+    total: items.length,
+  }), [items, year]);
+
+  const visible = filter === 'ALL' ? items : items.filter((l) => l.status === filter);
+  const previewDays = range?.[0] && range?.[1] ? workingDays(range[0], range[1]) : null;
+
+  const submit = async ({ leaveTypeId, range: [start, end], reason }) => {
     setSaving(true);
     try {
-      await api.post('/leaves', {
-        leaveTypeId, reason, startDate: range[0].format('YYYY-MM-DD'), endDate: range[1].format('YYYY-MM-DD'),
-      });
-      message.success('Leave request submitted');
+      await api.post('/leaves', { leaveTypeId, reason, startDate: start.format('YYYY-MM-DD'), endDate: end.format('YYYY-MM-DD') });
+      message.success('Leave request submitted for approval');
       setApplying(false);
       form.resetFields();
       load();
@@ -45,63 +57,126 @@ export default function MyLeavesPage() {
     }
   };
 
-  const cancel = async (id) => {
-    try {
-      await api.post(`/leaves/${id}/cancel`);
-      message.success('Request cancelled');
-      load();
-    } catch (err) {
-      message.error(errorMessage(err));
-    }
-  };
+  const cancel = (l) => modal.confirm({
+    title: 'Cancel this leave request?',
+    content: `${l.leaveType.name} leave, ${fmtRange(l.startDate, l.endDate)}`,
+    okText: 'Cancel request',
+    okButtonProps: { danger: true },
+    cancelText: 'Keep it',
+    onOk: async () => {
+      try {
+        await api.post(`/leaves/${l.id}/cancel`);
+        message.success('Request cancelled');
+        load();
+      } catch (err) {
+        message.error(errorMessage(err));
+      }
+    },
+  });
 
   const columns = [
-    { title: 'Type', render: (_, l) => l.leaveType.name },
-    { title: 'From', render: (_, l) => fmtDate(l.startDate) },
-    { title: 'To', render: (_, l) => fmtDate(l.endDate) },
-    { title: 'Days', dataIndex: 'days', width: 70 },
+    {
+      title: 'Leave',
+      render: (_, l) => (
+        <div>
+          <div style={{ fontWeight: 500 }}>{l.leaveType.name}</div>
+          <div className="person-sub">{fmtRange(l.startDate, l.endDate)}</div>
+        </div>
+      ),
+    },
+    { title: 'Days', dataIndex: 'days', width: 80, align: 'center' },
     { title: 'Reason', dataIndex: 'reason', ellipsis: true, responsive: ['md'] },
+    { title: 'Submitted', responsive: ['lg'], render: (_, l) => <span title={dayjs(l.createdAt).format('D MMM YYYY HH:mm')}>{dayjs(l.createdAt).fromNow()}</span> },
     { title: 'Status', render: (_, l) => <StatusTag status={l.status} /> },
     {
-      title: 'Actions',
+      title: '',
+      align: 'right',
       render: (_, l) => (
-        <Space>
-          <Button size="small" onClick={() => setHistoryId(l.id)}>History</Button>
-          {l.status === 'PENDING' && (
-            <Popconfirm title="Cancel this request?" onConfirm={() => cancel(l.id)}>
-              <Button size="small" danger>Cancel</Button>
-            </Popconfirm>
-          )}
-        </Space>
+        <>
+          <Button type="link" size="small" onClick={() => setHistoryId(l.id)}>Details</Button>
+          {l.status === 'PENDING' && <Button type="link" size="small" danger onClick={() => cancel(l)}>Cancel</Button>}
+        </>
       ),
     },
   ];
 
   return (
-    <Card>
-      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>My leave requests</Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setApplying(true)}>Apply for leave</Button>
-      </Space>
-      <Table
-        rowKey="id" loading={loading} columns={columns} dataSource={data.items} scroll={{ x: true }}
-        pagination={{ current: page, pageSize: 10, total: data.total, onChange: setPage }}
+    <>
+      <PageHeader
+        title="My leave"
+        subtitle="Request time off and track approvals"
+        extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setApplying(true)}>Request leave</Button>}
       />
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} sm={8}><StatCard icon={<ClockCircleOutlined />} color="#d97706" label="Pending approval" value={summary.pending} loading={loading} /></Col>
+        <Col xs={24} sm={8}><StatCard icon={<CheckCircleOutlined />} color="#16a34a" label={`Approved days in ${year}`} value={summary.approvedDays} loading={loading} /></Col>
+        <Col xs={24} sm={8}><StatCard icon={<CalendarOutlined />} color="#4f46e5" label="Total requests" value={summary.total} loading={loading} /></Col>
+      </Row>
+      <Card>
+        <div className="toolbar">
+          <Segmented
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { label: 'All', value: 'ALL' }, { label: 'Pending', value: 'PENDING' }, { label: 'Approved', value: 'APPROVED' },
+              { label: 'Rejected', value: 'REJECTED' }, { label: 'Cancelled', value: 'CANCELLED' },
+            ]}
+          />
+        </div>
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={visible}
+          scroll={{ x: true }}
+          pagination={visible.length > 10 && { pageSize: 10, showSizeChanger: false }}
+          locale={{
+            emptyText: (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filter === 'ALL' ? "You haven't requested any leave yet" : 'No requests with this status'}>
+                {filter === 'ALL' && <Button type="primary" onClick={() => setApplying(true)}>Request leave</Button>}
+              </Empty>
+            ),
+          }}
+        />
+      </Card>
 
-      <Modal title="Apply for leave" open={applying} onOk={form.submit} onCancel={() => setApplying(false)} confirmLoading={saving} okText="Submit">
-        <Form form={form} layout="vertical" onFinish={submit}>
-          <Form.Item name="leaveTypeId" label="Leave type" rules={[{ required: true }]}>
-            <Select options={leaveTypes.map((t) => ({ value: t.id, label: t.name }))} />
+      <Drawer
+        title="Request leave"
+        open={applying}
+        onClose={() => setApplying(false)}
+        width={480}
+        footer={(
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button onClick={() => setApplying(false)}>Cancel</Button>
+            <Button type="primary" loading={saving} onClick={form.submit} disabled={previewDays === 0}>Submit request</Button>
+          </div>
+        )}
+      >
+        <Form form={form} layout="vertical" onFinish={submit} requiredMark={false}>
+          <Form.Item name="leaveTypeId" label="Leave type" rules={[{ required: true, message: 'Choose a leave type' }]}>
+            <Radio.Group optionType="button" buttonStyle="solid" options={leaveTypes.map((t) => ({ value: t.id, label: t.name }))} />
           </Form.Item>
-          <Form.Item name="range" label="Dates" rules={[{ required: true, message: 'Select start and end dates' }]}>
-            <DatePicker.RangePicker style={{ width: '100%' }} disabledDate={(d) => d.isBefore(dayjs(), 'day')} />
+          <Form.Item name="range" label="Dates" rules={[{ required: true, message: 'Select the first and last day' }]}>
+            <DatePicker.RangePicker style={{ width: '100%' }} format="D MMM YYYY" disabledDate={(d) => d.isBefore(dayjs(), 'day')} />
           </Form.Item>
-          <Form.Item name="reason" label="Reason" rules={[{ required: true, min: 3, max: 500 }]}>
-            <Input.TextArea rows={3} showCount maxLength={500} />
+          {previewDays != null && (
+            <Alert
+              style={{ marginBottom: 24 }}
+              showIcon
+              type={previewDays ? 'info' : 'warning'}
+              message={previewDays
+                ? `${previewDays} working day${previewDays > 1 ? 's' : ''} will be requested`
+                : 'This range only covers a weekend - pick at least one working day'}
+              description={previewDays ? 'Weekends are not counted.' : undefined}
+            />
+          )}
+          <Form.Item name="reason" label="Reason" rules={[{ required: true, message: 'Add a short reason' }, { min: 3, max: 500 }]}>
+            <Input.TextArea rows={4} showCount maxLength={500} placeholder="e.g. Family trip" />
           </Form.Item>
+          <Alert type="success" showIcon={false} style={{ background: '#f8fafc', border: 0 }} message="Your request goes to your manager for approval. You can cancel it while it's pending." />
         </Form>
-      </Modal>
+      </Drawer>
       <LeaveHistoryDrawer leaveId={historyId} onClose={() => setHistoryId(null)} />
-    </Card>
+    </>
   );
 }

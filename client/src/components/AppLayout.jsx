@@ -1,9 +1,13 @@
-import { Layout, Menu, Dropdown, Avatar, Space, Typography, Tag } from 'antd';
+import { useCallback, useEffect, useState } from 'react';
+import { Badge, Button, Dropdown, Grid, Layout, Menu, Tag } from 'antd';
 import {
-  DashboardOutlined, TeamOutlined, CalendarOutlined, CheckSquareOutlined, UserOutlined, SafetyOutlined, LogoutOutlined,
+  AppstoreOutlined, TeamOutlined, CalendarOutlined, CheckSquareOutlined, UserOutlined, SafetyOutlined,
+  LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, DownOutlined,
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import api from '../api/client';
+import { UserAvatar } from './common';
 
 const { Header, Sider, Content } = Layout;
 
@@ -11,42 +15,119 @@ export default function AppLayout() {
   const { user, can, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.lg;
+  const [collapsed, setCollapsed] = useState(false);
+  const [pending, setPending] = useState(0);
 
-  // Menu only shows modules the user's role grants
-  const items = [
-    { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
-    can('employee:read') && {
-      key: '/employees', icon: <TeamOutlined />,
-      label: can('employee:read:all') ? 'Employees' : can('employee:read:team') ? 'My Team' : 'My Profile',
+  // Badge count for the approvals menu item; pages fire 'ems:counts' after actions
+  const loadCounts = useCallback(() => {
+    if (!can('leave:approve')) return;
+    api.get('/leaves', { params: { view: 'team', status: 'PENDING', pageSize: 1 } })
+      .then((r) => setPending(r.data.total)).catch(() => {});
+  }, [can]);
+
+  useEffect(() => {
+    loadCounts();
+    window.addEventListener('ems:counts', loadCounts);
+    return () => window.removeEventListener('ems:counts', loadCounts);
+  }, [loadCounts]);
+
+  useEffect(() => { if (isMobile) setCollapsed(true); }, [isMobile, pathname]);
+
+  const [first = '', last = ''] = (user.employee?.name || user.email).split(' ');
+
+  // Only modules the role grants are shown (the API enforces the same rules)
+  const groups = [
+    {
+      type: 'group', label: 'Workspace',
+      children: [
+        { key: '/', icon: <AppstoreOutlined />, label: 'Dashboard' },
+        can('employee:read') && {
+          key: '/employees', icon: <TeamOutlined />,
+          label: can('employee:read:all') ? 'Employees' : can('employee:read:team') ? 'My Team' : 'My Profile',
+        },
+        can('leave:create') && { key: '/leaves', icon: <CalendarOutlined />, label: 'My Leaves' },
+        can('leave:approve') && {
+          key: '/approvals', icon: <CheckSquareOutlined />,
+          label: (
+            <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              Approvals <Badge count={pending} size="small" style={{ boxShadow: 'none' }} />
+            </span>
+          ),
+        },
+      ].filter(Boolean),
     },
-    can('leave:create') && { key: '/leaves', icon: <CalendarOutlined />, label: 'My Leaves' },
-    can('leave:approve') && { key: '/approvals', icon: <CheckSquareOutlined />, label: 'Leave Approvals' },
-    can('user:manage') && { key: '/users', icon: <UserOutlined />, label: 'Users' },
-    can('role:manage') && { key: '/roles', icon: <SafetyOutlined />, label: 'Roles & Permissions' },
+    (can('user:manage') || can('role:manage')) && {
+      type: 'group', label: 'Administration',
+      children: [
+        can('user:manage') && { key: '/users', icon: <UserOutlined />, label: 'Users' },
+        can('role:manage') && { key: '/roles', icon: <SafetyOutlined />, label: 'Roles & Permissions' },
+      ].filter(Boolean),
+    },
   ].filter(Boolean);
 
-  const selected = items.find((i) => i.key !== '/' && pathname.startsWith(i.key))?.key || '/';
+  const keys = groups.flatMap((g) => g.children.map((c) => c.key));
+  const selected = keys.find((k) => k !== '/' && pathname.startsWith(k)) || '/';
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider breakpoint="lg" collapsedWidth="0" theme="light" style={{ borderRight: '1px solid #f0f0f0' }}>
-        <div style={{ padding: '18px 24px', fontWeight: 700, fontSize: 16 }}>EMS</div>
-        <Menu mode="inline" selectedKeys={[selected]} items={items} onClick={({ key }) => navigate(key)} style={{ borderInlineEnd: 0 }} />
+      <Sider
+        width={240}
+        collapsedWidth={isMobile ? 0 : 72}
+        collapsed={collapsed}
+        trigger={null}
+        style={{ position: 'sticky', top: 0, height: '100vh', zIndex: 20 }}
+      >
+        <div className="brand">
+          <div className="brand-mark">E</div>
+          {!collapsed && (
+            <div>
+              <div className="brand-name">EMS</div>
+              <div className="brand-sub">Employee Management</div>
+            </div>
+          )}
+        </div>
+        <Menu
+          theme="dark"
+          mode="inline"
+          selectedKeys={[selected]}
+          items={groups}
+          onClick={({ key }) => navigate(key)}
+        />
       </Sider>
       <Layout>
-        <Header style={{ background: '#fff', padding: '0 24px', display: 'flex', justifyContent: 'flex-end', borderBottom: '1px solid #f0f0f0' }}>
+        <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #eef0f4', position: 'sticky', top: 0, zIndex: 10 }}>
+          <Button
+            type="text"
+            aria-label="Toggle navigation"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+          />
           <Dropdown
-            menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: 'Log out', onClick: logout }] }}
+            trigger={['click']}
+            menu={{
+              items: [
+                { key: 'who', disabled: true, label: <div style={{ color: '#64748b' }}>{user.email}</div> },
+                { type: 'divider' },
+                { key: 'logout', icon: <LogoutOutlined />, label: 'Sign out', danger: true, onClick: logout },
+              ],
+            }}
           >
-            <Space style={{ cursor: 'pointer' }}>
-              <Avatar icon={<UserOutlined />} />
-              <Typography.Text>{user.employee?.name || user.email}</Typography.Text>
-              <Tag color="blue">{user.role}</Tag>
-            </Space>
+            <Button type="text" style={{ height: 48, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <UserAvatar first={first} last={last} size={32} />
+              {screens.sm && (
+                <span style={{ textAlign: 'left', lineHeight: 1.2 }}>
+                  <div style={{ fontWeight: 500 }}>{user.employee?.name || user.email}</div>
+                  <Tag color="purple" bordered={false} style={{ margin: 0, fontSize: 11, lineHeight: '16px' }}>{user.role}</Tag>
+                </span>
+              )}
+              <DownOutlined style={{ fontSize: 10, color: '#94a3b8' }} />
+            </Button>
           </Dropdown>
         </Header>
-        <Content style={{ margin: 24 }}>
-          <Outlet />
+        <Content style={{ padding: isMobile ? 16 : 28 }}>
+          <div className="page"><Outlet /></div>
         </Content>
       </Layout>
     </Layout>

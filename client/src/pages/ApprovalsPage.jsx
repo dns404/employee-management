@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import { App, Button, Card, Form, Input, Modal, Segmented, Space, Table, Typography } from 'antd';
+import { App, Button, Card, Descriptions, Empty, Form, Input, Modal, Segmented, Space, Table, Tooltip } from 'antd';
+import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { useAuth } from '../auth/AuthContext';
 import api, { errorMessage } from '../api/client';
-import { LeaveHistoryDrawer, StatusTag, fmtDate, fullName } from '../components/common';
+import { LeaveHistoryDrawer, PageHeader, PersonCell, StatusTag, fmtRange, notifyCountsChanged } from '../components/common';
 
-const FILTERS = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'ALL'];
+const FILTERS = [
+  { label: 'Pending', value: 'PENDING' }, { label: 'Approved', value: 'APPROVED' }, { label: 'Rejected', value: 'REJECTED' },
+  { label: 'Cancelled', value: 'CANCELLED' }, { label: 'All', value: 'ALL' },
+];
 
 export default function ApprovalsPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const { message } = App.useApp();
   const [form] = Form.useForm();
   const [status, setStatus] = useState('PENDING');
@@ -30,14 +35,16 @@ export default function ApprovalsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const closeDecision = () => { setDecision(null); form.resetFields(); };
+
   const decide = async ({ comment }) => {
     setSaving(true);
     try {
       await api.post(`/leaves/${decision.leave.id}/${decision.action}`, { comment });
-      message.success(`Request ${decision.action === 'approve' ? 'approved' : 'rejected'}`);
-      setDecision(null);
-      form.resetFields();
+      message.success(`Request from ${decision.leave.employee.firstName} ${decision.action === 'approve' ? 'approved' : 'rejected'}`);
+      closeDecision();
       load();
+      notifyCountsChanged();
     } catch (err) {
       message.error(errorMessage(err));
     } finally {
@@ -46,67 +53,98 @@ export default function ApprovalsPage() {
   };
 
   const columns = [
-    { title: 'Employee', render: (_, l) => `${fullName(l.employee)} (${l.employee.employeeCode})` },
-    { title: 'Type', render: (_, l) => l.leaveType.name },
-    { title: 'Dates', render: (_, l) => `${fmtDate(l.startDate)} → ${fmtDate(l.endDate)}` },
-    { title: 'Days', dataIndex: 'days', width: 70 },
+    { title: 'Employee', render: (_, l) => <PersonCell person={l.employee} sub={l.employee.employeeCode} /> },
+    {
+      title: 'Leave',
+      render: (_, l) => (
+        <div>
+          <div style={{ fontWeight: 500 }}>{l.leaveType.name} · {l.days} day{l.days > 1 ? 's' : ''}</div>
+          <div className="person-sub">{fmtRange(l.startDate, l.endDate)}</div>
+        </div>
+      ),
+    },
     { title: 'Reason', dataIndex: 'reason', ellipsis: true, responsive: ['lg'] },
+    { title: 'Requested', responsive: ['md'], render: (_, l) => dayjs(l.createdAt).fromNow() },
     { title: 'Status', render: (_, l) => <StatusTag status={l.status} /> },
     {
-      title: 'Actions',
+      title: '',
+      align: 'right',
       render: (_, l) => {
         const own = l.employee.id === user.employee?.id;
         return (
-          <Space>
-            <Button size="small" onClick={() => setHistoryId(l.id)}>History</Button>
-            {l.status === 'PENDING' && !own && (
+          <Space size={4}>
+            {l.status === 'PENDING' && (own ? (
+              <Tooltip title="You can't review your own request"><Button size="small" disabled>Review</Button></Tooltip>
+            ) : (
               <>
-                <Button size="small" type="primary" onClick={() => setDecision({ leave: l, action: 'approve' })}>Approve</Button>
-                <Button size="small" danger onClick={() => setDecision({ leave: l, action: 'reject' })}>Reject</Button>
+                <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => setDecision({ leave: l, action: 'approve' })}>Approve</Button>
+                <Button size="small" danger icon={<CloseOutlined />} onClick={() => setDecision({ leave: l, action: 'reject' })}>Reject</Button>
               </>
-            )}
+            ))}
+            <Button type="link" size="small" onClick={() => setHistoryId(l.id)}>Details</Button>
           </Space>
         );
       },
     },
   ];
 
+  const approving = decision?.action === 'approve';
+
   return (
-    <Card>
-      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} wrap>
-        <Typography.Title level={4} style={{ margin: 0 }}>Leave approvals</Typography.Title>
-        <Segmented options={FILTERS} value={status} onChange={(v) => { setStatus(v); setPage(1); }} />
-      </Space>
-      <Table
-        rowKey="id" loading={loading} columns={columns} dataSource={data.items} scroll={{ x: true }}
-        pagination={{ current: page, pageSize: 10, total: data.total, onChange: setPage }}
+    <>
+      <PageHeader
+        title="Leave approvals"
+        subtitle={can('leave:approve:all') ? 'Review leave requests across the organisation' : 'Review leave requests from your direct reports'}
       />
+      <Card>
+        <div className="toolbar">
+          <Segmented options={FILTERS} value={status} onChange={(v) => { setStatus(v); setPage(1); }} />
+        </div>
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={data.items}
+          scroll={{ x: true }}
+          locale={{
+            emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={status === 'PENDING' ? "Nothing waiting for you - you're all caught up" : 'No requests with this status'} />,
+          }}
+          pagination={data.total > 10 && { current: page, pageSize: 10, total: data.total, onChange: setPage, showSizeChanger: false }}
+        />
+      </Card>
 
       <Modal
         open={!!decision}
-        title={decision?.action === 'approve' ? 'Approve leave request' : 'Reject leave request'}
-        okText={decision?.action === 'approve' ? 'Approve' : 'Reject'}
-        okButtonProps={{ danger: decision?.action === 'reject' }}
+        title={approving ? 'Approve leave request' : 'Reject leave request'}
+        okText={approving ? 'Approve' : 'Reject request'}
+        okButtonProps={{ danger: !approving, icon: approving ? <CheckOutlined /> : <CloseOutlined /> }}
         onOk={form.submit}
-        onCancel={() => { setDecision(null); form.resetFields(); }}
+        onCancel={closeDecision}
         confirmLoading={saving}
+        destroyOnHidden
       >
         {decision && (
-          <Typography.Paragraph>
-            {fullName(decision.leave.employee)} — {decision.leave.leaveType.name}, {fmtDate(decision.leave.startDate)} → {fmtDate(decision.leave.endDate)} ({decision.leave.days} days)
-          </Typography.Paragraph>
+          <>
+            <div style={{ margin: '16px 0' }}><PersonCell person={decision.leave.employee} sub={decision.leave.employee.employeeCode} size={40} /></div>
+            <Descriptions column={1} size="small" bordered style={{ marginBottom: 20 }}>
+              <Descriptions.Item label="Type">{decision.leave.leaveType.name}</Descriptions.Item>
+              <Descriptions.Item label="Dates">{fmtRange(decision.leave.startDate, decision.leave.endDate)}</Descriptions.Item>
+              <Descriptions.Item label="Working days">{decision.leave.days}</Descriptions.Item>
+              <Descriptions.Item label="Reason">{decision.leave.reason}</Descriptions.Item>
+            </Descriptions>
+          </>
         )}
-        <Form form={form} layout="vertical" onFinish={decide}>
+        <Form form={form} layout="vertical" onFinish={decide} requiredMark={false}>
           <Form.Item
             name="comment"
-            label={decision?.action === 'reject' ? 'Reason for rejection' : 'Comment (optional)'}
-            rules={decision?.action === 'reject' ? [{ required: true, min: 3, message: 'Please give a reason (min 3 characters)' }] : []}
+            label={approving ? 'Note to employee (optional)' : 'Reason for rejection'}
+            rules={approving ? [] : [{ required: true, message: 'Let the employee know why' }, { min: 3, message: 'At least 3 characters' }]}
           >
-            <Input.TextArea rows={3} maxLength={500} showCount />
+            <Input.TextArea rows={3} maxLength={500} showCount placeholder={approving ? 'e.g. Enjoy your time off' : 'e.g. Release week - please pick other dates'} />
           </Form.Item>
         </Form>
       </Modal>
       <LeaveHistoryDrawer leaveId={historyId} onClose={() => setHistoryId(null)} />
-    </Card>
+    </>
   );
 }
