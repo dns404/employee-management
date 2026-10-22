@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Button, Form, Input, Typography } from 'antd';
+import { Alert, Button, Form, Input, Tooltip, Typography } from 'antd';
 import { LockOutlined, MailOutlined, SafetyCertificateOutlined, TeamOutlined, UserOutlined, CheckCircleFilled } from '@ant-design/icons';
 import { useAuth } from '../auth/AuthContext';
 import { errorMessage } from '../api/client';
@@ -17,6 +17,11 @@ export default function LoginPage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const email = Form.useWatch('email', form);
+
+  const pick = (d) => {
+    form.setFieldsValue({ email: d.email, password: DEMO_PASSWORD });
+    setError(null);
+  };
 
   const submit = async (values) => {
     setLoading(true);
@@ -49,8 +54,8 @@ export default function LoginPage() {
 
       <div className="login-form">
         <div className="login-form-inner">
-          <Typography.Title level={2} style={{ marginBottom: 4 }}>Welcome back</Typography.Title>
-          <Typography.Paragraph type="secondary" style={{ marginBottom: 28 }}>Sign in to your account to continue.</Typography.Paragraph>
+          <Typography.Title level={3} style={{ marginBottom: 4 }}>Welcome back</Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 20 }}>Sign in to your account to continue.</Typography.Paragraph>
 
           {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 20 }} />}
 
@@ -64,29 +69,26 @@ export default function LoginPage() {
             <Button type="primary" htmlType="submit" block loading={loading} style={{ marginTop: 4 }}>Sign in</Button>
           </Form>
 
-          <div className="section-title" style={{ marginTop: 36 }}>Try a demo account</div>
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div className="section-title" style={{ marginTop: 24 }}>Try a demo account</div>
+          <div className="demo-grid">
             {DEMO.map((d) => (
-              <div
-                key={d.role}
-                role="button"
-                tabIndex={0}
-                className={`demo-card ${email === d.email ? 'active' : ''}`}
-                onClick={() => { form.setFieldsValue({ email: d.email, password: DEMO_PASSWORD }); setError(null); }}
-                onKeyDown={(e) => e.key === 'Enter' && form.setFieldsValue({ email: d.email, password: DEMO_PASSWORD })}
-              >
-                <div className="stat-icon" style={{ width: 36, height: 36, fontSize: 16, borderRadius: 8, background: `${d.color}1a`, color: d.color }}>{d.icon}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 500 }}>{d.role}</div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>{d.desc}</div>
+              <Tooltip key={d.role} title={`${d.desc} · ${d.email}`}>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className={`demo-card ${email === d.email ? 'active' : ''}`}
+                  onClick={() => pick(d)}
+                  onKeyDown={(e) => e.key === 'Enter' && pick(d)}
+                >
+                  <div className="stat-icon" style={{ width: 32, height: 32, fontSize: 15, borderRadius: 8, background: `${d.color}1a`, color: d.color }}>{d.icon}</div>
+                  <div style={{ fontWeight: 500, fontSize: 13 }}>{d.role}</div>
                 </div>
-                <div style={{ fontSize: 12, color: '#94a3b8' }}>{d.email}</div>
-              </div>
+              </Tooltip>
             ))}
           </div>
-          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 12 }}>
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 10 }}>
             Password for all demo accounts: <code>{DEMO_PASSWORD}</code>
-          </Typography.Paragraph>
+          </div>
         </div>
       </div>
     </div>
