@@ -112,6 +112,8 @@ Permissions are re-read from the database on **every request**, so role changes 
 
 ## Database schema
 
+All tables live in a dedicated **`ems`** schema, not `public`. This is set with `?schema=ems` in `DATABASE_URL`, and keeps the app's objects separate from PostgreSQL defaults. The local connection is `localhost:5434`, database `employee_mgmt`, user `ems` / `ems_password`.
+
 ```
 roles ─< role_permissions >─ permissions
   │
