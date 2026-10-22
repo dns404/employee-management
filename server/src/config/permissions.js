@@ -21,7 +21,8 @@ const PERMISSIONS = {
 };
 
 const ROLE_PERMISSIONS = {
-  Administrator: Object.keys(PERMISSIONS),
+  // Admins sit at the top of the hierarchy with no one to approve their leave, so they don't request leave
+  Administrator: Object.keys(PERMISSIONS).filter((key) => !['leave:create:own', 'leave:cancel:own'].includes(key)),
   Manager: [
     'employee:read:team', 'employee:read:own', 'employee:update:team', 'employee:update:own',
     'leave:create:own', 'leave:read:team', 'leave:read:own', 'leave:approve:team', 'leave:cancel:own',

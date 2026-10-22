@@ -98,9 +98,8 @@ describe('Leave approval workflow', () => {
     expect((await api(t.admin).post(`/api/leaves/${own.body.id}/approve`)).status).toBe(200);
   });
 
-  test('admin cannot approve their own leave either', async () => {
-    const own = await submit(t.admin, range('2030-07-01', '2030-07-02'));
-    expect((await api(t.admin).post(`/api/leaves/${own.body.id}/approve`)).status).toBe(403);
+  test('admin cannot request leave (no one above them to approve it)', async () => {
+    expect((await submit(t.admin, range('2030-07-01', '2030-07-02'))).status).toBe(403);
   });
 
   test('employee can cancel own pending request but not someone else\'s', async () => {

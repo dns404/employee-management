@@ -95,9 +95,9 @@ Permissions are re-read from the database on **every request**, so role changes 
 | View employees | All | Self + direct reports | Self |
 | Edit employee | All fields | Job title of direct reports; own phone/address | Own phone/address |
 | Create / deactivate employees | ✅ | ❌ | ❌ |
-| Submit / cancel own leave | ✅ | ✅ | ✅ |
+| Submit / cancel own leave | ❌ | ✅ | ✅ |
 | View leave | All | Own + direct reports | Own |
-| Approve / reject leave | All (except own) | Direct reports only (never own) | ❌ |
+| Approve / reject leave | All | Direct reports only (never own) | ❌ |
 | Manage users & role assignment | ✅ | ❌ | ❌ |
 | Manage roles & permissions | ✅ | ❌ | ❌ |
 
@@ -136,7 +136,7 @@ The full schema is in [`server/prisma/schema.prisma`](server/prisma/schema.prism
 
 **Business rules** (in the service layer):
 
-- Nobody can approve their own leave, including administrators.
+- Nobody can approve their own leave. Administrators cannot request leave at all: they have no manager, so nobody could approve it. This is configured through the role's permissions (no `leave:create:own`), not hard-coded.
 - Managers act only on their direct reports.
 - Status transitions are atomic (`UPDATE … WHERE status = 'PENDING'`), so double approval returns 409.
 - Every transition writes a history row: who did it, when, and with what comment.
@@ -190,7 +190,7 @@ Errors always have the shape `{ "error": { "message": "...", "details": [{ "fiel
 - **Leaves:**
   - An employee approving gets 403.
   - Another team's manager gets 404.
-  - Self-approval (manager or admin) gets 403.
+  - Manager self-approval gets 403, and an admin submitting leave gets 403.
   - Approving twice gets 409.
   - Cancelling someone else's request gets 404.
   - Overlaps get 409, and the DB constraint blocks them even when the API is bypassed.
